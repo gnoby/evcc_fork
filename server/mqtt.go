@@ -15,6 +15,7 @@ import (
 	"github.com/evcc-io/evcc/core/vehicle"
 	"github.com/evcc-io/evcc/plugin/mqtt"
 	"github.com/evcc-io/evcc/util"
+	"github.com/samber/lo"
 )
 
 // MQTTMarshaler is the interface implemented by types that
@@ -211,6 +212,12 @@ func (m *MQTT) listenSiteSetters(topic string, site site.API) error {
 			}
 		}))},
 		{"batteryGridChargeLimit", floatPtrSetter(pass(site.SetBatteryGridChargeLimit))},
+		{"batteryMode", ptrSetter(api.BatteryModeString, pass(func(m *api.BatteryMode) {
+			if m == nil {
+				m = lo.ToPtr(api.BatteryUnknown)
+			}
+			site.SetBatteryModeExternal(*m)
+		}))},
 	} {
 		if err := m.Handler.ListenSetter(topic+"/"+s.topic, s.fun); err != nil {
 			return err
@@ -237,12 +244,13 @@ func (m *MQTT) listenLoadpointSetters(topic string, site site.API, lp loadpoint.
 		{"batteryBoost", boolSetter(lp.SetBatteryBoost)},
 		{"planEnergy", func(payload string) error {
 			var plan struct {
-				Time  time.Time `json:"time"`
-				Value float64   `json:"value"`
+				Time         time.Time `json:"time"`
+				Precondition int64     `json:"precondition"`
+				Value        float64   `json:"value"`
 			}
 			err := json.Unmarshal([]byte(payload), &plan)
 			if err == nil {
-				err = lp.SetPlanEnergy(plan.Time, plan.Value)
+				err = lp.SetPlanEnergy(plan.Time, time.Duration(plan.Precondition)*time.Second, plan.Value)
 			}
 			return err
 		}},
@@ -273,12 +281,13 @@ func (m *MQTT) listenVehicleSetters(topic string, v vehicle.API) error {
 		{"minSoc", intSetter(pass(v.SetMinSoc))},
 		{"planSoc", func(payload string) error {
 			var plan struct {
-				Time  time.Time `json:"time"`
-				Value int       `json:"value"`
+				Time         time.Time `json:"time"`
+				Precondition int64     `json:"precondition"`
+				Value        int       `json:"value"`
 			}
 			err := json.Unmarshal([]byte(payload), &plan)
 			if err == nil {
-				err = v.SetPlanSoc(plan.Time, plan.Value)
+				err = v.SetPlanSoc(plan.Time, time.Duration(plan.Precondition)*time.Second, plan.Value)
 			}
 			return err
 		}},
